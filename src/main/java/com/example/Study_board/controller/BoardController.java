@@ -1,0 +1,253 @@
+package com.example.Study_board.controller;
+
+import com.example.Study_board.dao.BoardDao;
+import com.example.Study_board.dto.*;
+import com.example.Study_board.service.BoardService;
+import com.example.Study_board.service.CommentService;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.ui.Model;
+import jakarta.servlet.http.HttpSession;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Controller;
+import org.springframework.web.bind.annotation.*;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.web.multipart.MultipartFile;
+import org.springframework.web.servlet.mvc.support.RedirectAttributes;
+
+
+import java.util.ArrayList;
+import java.util.List;
+
+@Controller
+@RequiredArgsConstructor
+@RequestMapping("/board")
+@Slf4j
+public class BoardController {
+    private final BoardDao boardDao;
+    private final BoardService boardService;
+    private final CommentService commentService;
+    private final String board1 = "board1";
+    private final String board2 = "board2";
+    private final String board3 = "board3";
+    private final String board4 = "board4";
+
+
+    // 각 게시판 이동
+    @GetMapping("/{boardType}")  // 게시글 목록 가져 오기
+    public String boardlist(@PathVariable String boardType, @RequestParam(defaultValue = "0") int page, @RequestParam(defaultValue = "10") int size, HttpSession session, Model model) {
+        // 로그인 여부 확인 var은 타입 추론을 해서 자동으로 형을 찾아 줌
+        MemberRes loginMember = (MemberRes) session.getAttribute("loginMember");
+        if (loginMember == null) return "redirect:/login";  // 세션이 없으면 로그인 페이지로 이동
+        // 게시판에 표시될 게시글 리스트
+        List<BoardListRes> list = boardService.list(boardType);
+        // 보여줄 페이지 데이터
+        int start = Math.min(page * size, list.size());
+        int end = Math.min(start + size, list.size());
+        List<BoardListRes> subList = list.subList(start, end);
+
+        Page<BoardListRes> boardPage = new PageImpl<>(subList, PageRequest.of(page, size), list.size());
+
+        // 2. ⭐️ boardType 값을 사용하여 boardName 결정
+        String boardName;
+        switch (boardType) {
+            case "board1":
+                boardName = "공지사항";
+                break;
+            case "board2":
+                boardName = "자유게시판";
+                break;
+            case "board3":
+                boardName = "코드게시판";
+                break;
+            case "board4":
+                boardName = "스터디게시판";
+            default:
+                boardName = "알 수 없는 게시판";
+        }
+
+        // 3. ⭐️ boardName을 Model에 담아 View로 전달
+        model.addAttribute("boardName", boardName);
+
+        // 화면에 표시될 게시글 리스트(10개씩 나눈거)
+        model.addAttribute("posts", subList);
+        // 페이지네이션용 page 객체
+        model.addAttribute("page", boardPage);
+        // 해당게시판 타입 모델로 저장
+        model.addAttribute("boardType", boardType);
+
+        return "board/list";
+    }
+
+    // 게시글 상세 보기
+    @GetMapping("/detail/{id}") // 현재 이동시 주소 http://localhost:8112/posts/detail/id
+    public String detail(@PathVariable Long id, Model model, HttpSession session) {
+        // 로그인 여부 확인
+        MemberRes loginMember = (MemberRes) session.getAttribute("loginMember");
+        if (loginMember == null) return "redirect:/login";
+
+        // 조회수 증가 먼저 실행
+        boardService.increaseViewCount(id);
+
+        // 해당 게시글 정보 가져옴
+        BoardRes post = boardDao.findByBoardID(id);
+        if (post == null) {
+            model.addAttribute("error", "해당 게시글이 존재하지 않습니다.");
+            return "post/error"; // 없는 경우 따로 처리 가능
+        }
+        // 게시글 정보를 모델링
+        model.addAttribute("post", post);
+        // 게시글 타입을 모델링
+        model.addAttribute("boardType", post.getBoard_type());
+        // 사용자 정보를 모델링
+        model.addAttribute("loginMember", loginMember);
+        // BOARD_TYPE에 따른 BOARD_NAME 설정
+        String boardName = switch (post.getBoard_type()) {
+            case "board1" -> "공지사항";
+            case "board2" -> "자유게시판";
+            case "board3" -> "코드게시판";
+            case "board4" -> "스터디게시판";
+            default -> "게시판";
+        };
+        model.addAttribute("boardName", boardName);
+
+        // 해당 게시글 코멘트 리스트 정보를 가져옴
+        List<CommentRes> comment = commentService.listByBoardid(id);
+        if (comment == null) {
+            comment = new ArrayList<>();
+            model.addAttribute("comment", comment);
+        }
+
+        // 코멘트 정보를 모델링
+        model.addAttribute("comment", comment);
+
+        // ★ 로그인한 사용자 ID와 각 댓글 작성자 ID 로그 찍기
+        System.out.println("로그인 사용자 ID: " + loginMember.getId());
+        for (CommentRes c : comment) {
+            System.out.println("댓글 ID: " + c.getBoard_id() + " / 작성자 ID: " + c.getMember_id());
+            System.out.println("loginMember.id == c.member_id ? " + (loginMember.getId() == c.getMember_id()));
+
+        }
+
+
+        return "board/detail"; // detail.html 템플릿으로 이동
+    }
+
+    // 게시글 작성 페이지로 이동
+    @GetMapping("/{board_type}/new")
+    public String moveboard(@PathVariable String board_type, Model model) {
+
+        model.addAttribute("boardType", board_type);
+
+        String boardName = switch (board_type) {
+            case "board1" -> "공지사항";
+            case "board2"   -> "자유게시판";
+            case "board3"   -> "코드게시판";
+            case "board4"  -> "스터디게시판";
+            default       -> "게시판";
+        };
+        model.addAttribute("boardName", boardName);
+        return "board/post";
+    }
+
+
+    // 게시글 작성
+    @PostMapping("/{board_type}/new")
+    public String crateboard(@PathVariable String board_type, BoardCreateReq req, @RequestParam(value = "imageFile", required = false) MultipartFile imageFile, HttpSession session, Model model) {
+        MemberRes member = (MemberRes) session.getAttribute("loginMember");
+        if(member == null) {
+            return "redirect:/login/login";
+        }
+        try {
+            req.setBoard_type(board_type);
+            req.setMember_id (member.getId()); // 화면에서 정보를 입력받을 수 없기 때문에 세션정보에서 추출해서 넣어 줌
+            Long board_id = boardService.board(req, imageFile);
+            return "redirect:/board/" + req.getBoard_type();
+        } catch (IllegalArgumentException e) {
+            model.addAttribute("error", e.getMessage());
+            return "board/post";
+        }
+    }
+    // 게시글 수정 페이지 이동
+    @GetMapping("/{id}/edit")
+    public String editPage(@PathVariable("id") Long boardId,
+                           HttpSession session,
+                           Model model) {
+
+        MemberRes loginMember = (MemberRes) session.getAttribute("loginMember");
+
+        // 기존에 있는 메서드 사용 (findById 창조하지 않음)
+        BoardRes board = boardDao.findByBoardID(boardId);
+        if (board == null) {
+            return "error/404";
+        }
+
+        // 작성자 검증
+        if (!(loginMember.getId()==board.getMember_id())) {
+            return "error/403";
+        }
+        model.addAttribute("post", board);
+        return "board/edit";
+    }
+    // 게시글 수정
+    @PostMapping("/{id}/edit")
+    public String updatePost(@PathVariable("id") Long boardId,
+                             @RequestParam String title, // 폼의 name="title"
+                             @RequestParam String contents, // 폼의 name="contents"
+                             // MultipartFile: 파일 데이터. required=false로 파일이 없어도 에러나지 않게 함
+                             @RequestParam(value = "newImageFile", required = false) MultipartFile newImageFile,
+                             // boolean: 체크박스. 기본값은 false로 설정
+                             @RequestParam(value = "deleteImage", defaultValue = "false") boolean deleteImage,
+                             HttpSession session) {
+
+        // 1. 로그인 회원 정보 가져오기
+        MemberRes loginMember = (MemberRes) session.getAttribute("loginMember");
+
+        if (loginMember == null) {
+            // 로그인 상태가 아니면 접근 거부 또는 로그인 페이지로 리다이렉트
+            return "redirect:/member/login";
+        }
+
+        // 2. Service 호출 시 파일 및 삭제 플래그를 함께 전달
+        boolean updated = boardService.update(
+                boardId,
+                loginMember.getId(), // 수정 권한 확인용 member_id
+                title,
+                contents,
+                newImageFile, // 새로 업로드된 파일
+                deleteImage   // 기존 파일 삭제 요청 플래그
+        );
+
+        // 3. 결과 처리 및 리다이렉트
+        if (updated) {
+            log.info("게시글 수정 성공: {}", boardId);
+            // 수정 성공 시 상세 페이지로 리다이렉트
+            return "redirect:/board/detail/" + boardId;
+        } else {
+            // 수정 실패 (권한 없음, DB 오류 등)
+            log.warn("게시글 수정 실패: {}", boardId);
+            return "error/403"; // 권한 없음 또는 일반적인 에러 페이지
+        }
+    }
+    // 게시글 삭제
+    @PostMapping("/{id}/delete")
+    public String deletePost(@PathVariable("id") Long boardId,
+                             HttpSession session) {
+
+        MemberRes loginMember = (MemberRes) session.getAttribute("loginMember");
+
+        // 게시글id로 board_Type 조회
+        BoardRes post = boardService.getboardRes(boardId);
+        if (post == null) {
+            return "error/404";
+        }
+        boolean deleted = boardService.delete(boardId, loginMember.getId());
+
+        if (!deleted) {
+            return "error/403";
+        }
+
+        return "redirect:/board/" + post.getBoard_type();
+    }
+}

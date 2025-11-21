@@ -1,0 +1,827 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <title th:text="${post.title} + ' - 곰사육사 커뮤니티'">게시글 보기</title>
+
+    <style>
+        /* ---------- Design tokens ---------- */
+      :root {
+        --bg: #f4f6fb;
+        --card: #ffffff;
+        --border: #e6e8ef;
+        --text: #101828;
+        --muted: #667085;
+        --primary: #6f7ddf;
+        --primary-600: #5f6dcd;
+        --accent: #0d6efd;
+        --accent-600: #0b5ed7;
+        --radius: 14px;
+        --shadow: 0 16px 40px rgba(16, 24, 40, 0.08);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        height: 100%;
+        margin: 0;
+      }
+      body {
+        display: flex;
+        flex-direction: column;
+        min-height: 100vh;
+        background: var(--bg);
+        color: var(--text);
+        font: 16px/1.6 "Noto Sans KR", system-ui, -apple-system, Segoe UI,
+          Roboto, Arial, sans-serif;
+      }
+
+      /* header (기존과 동일) */
+      header {
+        position: sticky;
+        top: 0;
+        z-index: 20;
+        background: linear-gradient(0deg, var(--primary-600), var(--primary));
+        color: #fff;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.15);
+      }
+      .header-inner {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 10px 16px;
+        display: grid;
+        grid-template-columns: 1fr auto auto;
+        gap: 12px;
+        align-items: center;
+      }
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        min-width: 0;
+      }
+      .logo-img {
+        width: 34px;
+        height: auto;
+        object-fit: contain;
+      }
+      .brand h1 {
+        margin: 0;
+        font-size: 18px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .top-actions {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        justify-content: flex-end;
+      }
+      .pill {
+        background: transparent;
+        border: none;
+        color: #fff;
+        padding: 0 8px;
+        font-size: 14px;
+        font-weight: 600;
+        cursor: pointer;
+      }
+      .pill:hover {
+        text-decoration: underline;
+      }
+      .search {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        background: #fff;
+        border-radius: 999px;
+        padding: 6px 10px;
+        min-width: 240px;
+      }
+      .search input {
+        border: 0;
+        outline: 0;
+        width: 220px;
+        font-size: 14px;
+        color: var(--text);
+      }
+
+      /* layout: 좌/중/우 3열 (리스트 페이지와 동일 컨셉) */
+      .container {
+        flex: 1;
+        width: 100%;
+        max-width: 1200px;
+        margin: 40px auto;
+        padding: 0 24px;
+        display: grid;
+        grid-template-columns: 200px minmax(0, 1.8fr) 220px;
+        gap: 18px;
+      }
+
+      /* left nav */
+      aside.nav {
+        position: sticky;
+        top: 72px;
+        align-self: start;
+      }
+      .menu {
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        padding: 12px;
+        box-shadow: var(--shadow);
+      }
+      .menu a {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        padding: 12px 14px;
+        margin: 6px 0;
+        text-decoration: none;
+        color: var(--text);
+        background: #f8f9fe;
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        font-weight: 600;
+      }
+      .menu a:hover {
+        background: #eef0fd;
+      }
+
+      /* 가운데: 게시글 상세 페이지 레이아웃 */
+      main.post-page {
+        display: block;
+      }
+
+      .post-card {
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        box-shadow: var(--shadow);
+        padding: 20px 24px 24px;
+      }
+
+      /* 상단: 게시판 이름 + 목록으로 버튼 */
+      .post-header-top {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 12px;
+      }
+      .post-header-top .board-name {
+        font-size: 18px;
+        font-weight: 700;
+      }
+      .btn-outline {
+        border-radius: 999px;
+        padding: 6px 14px;
+        border: 1px solid var(--border);
+        background: #fff;
+        font-size: 13px;
+        cursor: pointer;
+      }
+
+      /* 제목/메타 */
+      .post-title {
+        margin: 0;
+        font-size: 22px;
+        font-weight: 700;
+      }
+      .post-meta {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin-top: 6px;
+        font-size: 13px;
+        color: var(--muted);
+      }
+      .post-meta span::before {
+        content: "·";
+        margin: 0 4px;
+      }
+      .post-meta span:first-child::before {
+        content: "";
+        margin: 0;
+      }
+
+      hr.post-separator {
+        border: 0;
+        border-bottom: 1px solid var(--border);
+        margin: 16px 0 12px;
+      }
+
+      /* 본문 */
+      .post-content {
+        font-size: 15px;
+        line-height: 1.8;
+        white-space: pre-wrap; /* 줄바꿈 유지 */
+        min-height: 120px;
+      }
+
+      /* 본문 하단 버튼 (수정/삭제/목록 등 필요시) */
+      .post-actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 8px;
+        margin-top: 16px;
+      }
+      .btn-secondary {
+        border-radius: 999px;
+        padding: 6px 14px;
+        border: 1px solid var(--border);
+        background: #fff;
+        font-size: 13px;
+        cursor: pointer;
+      }
+
+      /* 댓글 영역 */
+      .comment-section {
+        margin-top: 24px;
+        padding-top: 16px;
+        border-top: 1px solid var(--border);
+      }
+      .comment-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+        margin-bottom: 12px;
+      }
+      .comment-header h3 {
+        margin: 0;
+        font-size: 16px;
+        font-weight: 700;
+      }
+      .comment-header span {
+        font-size: 13px;
+        color: var(--muted);
+      }
+
+      .comment-list {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        margin-bottom: 16px;
+      }
+      .comment-item {
+        padding: 8px 0;
+        border-bottom: 1px solid var(--border);
+      }
+      .comment-meta {
+        display: flex;
+        gap: 8px;
+        font-size: 13px;
+        color: var(--muted);
+        margin-bottom: 4px;
+      }
+      .comment-content {
+        font-size: 14px;
+        white-space: pre-wrap;
+      }
+
+      /* 댓글 입력 폼 */
+      .comment-form {
+        margin-top: 8px;
+      }
+      .comment-form textarea {
+        width: 100%;
+        min-height: 80px;
+        border-radius: 10px;
+        border: 1px solid var(--border);
+        padding: 10px;
+        font-family: inherit;
+        font-size: 14px;
+        resize: vertical;
+        outline: none;
+      }
+      .comment-form textarea:focus {
+        border-color: var(--accent);
+      }
+      .comment-form-footer {
+        display: flex;
+        justify-content: flex-end;
+        margin-top: 8px;
+      }
+      .btn-comment {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 90px;
+        height: 36px;
+        padding: 0 16px;
+        border-radius: 10px;
+        border: none;
+        background: var(--accent);
+        color: #fff;
+        font-size: 14px;
+        font-weight: 600;
+        cursor: pointer;
+      }
+      .btn-comment:hover {
+        background: var(--accent-600);
+      }
+
+      /* right sidebar */
+      aside.right {
+        position: sticky;
+        top: 72px;
+        align-self: start;
+        display: flex;
+        flex-direction: column;
+        gap: 18px;
+      }
+      .card {
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        box-shadow: var(--shadow);
+        padding: 16px;
+      }
+      .btn {
+        display: block;
+        width: 100%;
+        text-align: center;
+        text-decoration: none;
+        font-weight: 700;
+        padding: 12px 14px;
+        border-radius: 12px;
+        margin: 8px 0;
+        border: 1px solid transparent;
+      }
+      .btn.primary {
+        background: var(--accent);
+        color: #fff;
+      }
+      .btn.primary:hover {
+        background: var(--accent-600);
+      }
+      .btn.ghost {
+        background: #fff;
+        border-color: var(--border);
+        color: var(--text);
+      }
+      .btn.ghost:hover {
+        background: #f6f7fb;
+      }
+      .hero {
+        border-radius: var(--radius);
+        width: 100%;
+        height: auto;
+        display: block;
+        border: 1px solid var(--border);
+      }
+
+      /* 로그인 사용자 사이드바 패널 */
+      .user-panel {
+        padding: 18px 16px 20px;
+      }
+
+      .user-greeting {
+        width: 100%;
+        padding: 14px 16px;
+        border-radius: 10px;
+        background: #d9e0da;
+        text-align: center;
+        font-size: 16px;
+        font-weight: 600;
+        box-shadow: 0 8px 18px rgba(0, 0, 0, 0.06);
+      }
+
+      .user-actions {
+        margin-top: 18px;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+
+      .user-btn {
+        display: block;
+        width: 100%;
+        text-align: center;
+        padding: 12px 0;
+        border-radius: 10px;
+        border: none;
+        background: var(--accent);
+        color: #fff;
+        font-size: 15px;
+        font-weight: 600;
+        text-decoration: none;
+        cursor: pointer;
+        box-shadow: 0 10px 20px rgba(37, 99, 235, 0.35);
+      }
+
+      .user-btn:hover {
+        background: var(--accent-600);
+      }
+
+      /* footer (기존과 동일) */
+      footer {
+        margin-top: 28px;
+        background: var(--primary-600);
+        color: #dfe3ff;
+        border-top: 1px solid rgba(255, 255, 255, 0.15);
+      }
+      .footer-inner {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 14px 16px;
+        display: flex;
+        gap: 24px;
+        justify-content: space-between;
+        align-items: center;
+        flex-wrap: wrap;
+      }
+      .footer-links {
+        display: flex;
+        gap: 28px;
+        flex-wrap: wrap;
+      }
+      .footer-links a {
+        color: #fff;
+        text-decoration: none;
+        opacity: 0.95;
+      }
+      .footer-links a:hover {
+        text-decoration: underline;
+      }
+
+      /* 게시글/댓글 공감·신고 숫자/버튼 공통 스타일 */
+      .reaction-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-top: 12px;
+        gap: 12px;
+        font-size: 13px;
+        color: var(--muted);
+      }
+
+      .reaction-counts {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+      }
+
+      .reaction-counts span {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+      }
+
+      .reaction-counts .like::before {
+        content: "👍";
+        font-size: 14px;
+      }
+
+      .reaction-counts .report::before {
+        content: "⚠";
+        font-size: 14px;
+      }
+
+      /* 버튼 영역 */
+      .reaction-buttons {
+        display: flex;
+        gap: 6px;
+      }
+
+      .btn-reaction {
+        border-radius: 999px;
+        padding: 4px 10px;
+        border: 1px solid var(--border);
+        background: #fff;
+        font-size: 12px;
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+      }
+
+      .btn-reaction.like-btn::before {
+        content: "👍";
+        font-size: 13px;
+      }
+
+      .btn-reaction.report-btn::before {
+        content: "⚠";
+        font-size: 13px;
+      }
+
+      .btn-reaction:hover {
+        background: #f3f4ff;
+      }
+
+      /* 댓글용 조금 더 작게 */
+      .comment-reaction-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-top: 6px;
+        font-size: 12px;
+        color: var(--muted);
+      }
+
+      .comment-reaction-row .reaction-counts {
+        gap: 8px;
+      }
+
+      .comment-reaction-row .btn-reaction {
+        font-size: 11px;
+        padding: 3px 8px;
+      }
+
+      .comment-owner-actions {
+        margin-top: 4px;
+        display: flex;
+        gap: 4px;
+      }
+
+      /* 게시글/댓글 공통: 수정·삭제 버튼 영역 */
+      .owner-actions {
+        margin-top: 8px;
+        display: flex;
+        justify-content: flex-end;
+        gap: 6px;
+      }
+
+      /* 게시글/댓글 공통: 수정·삭제 버튼 스타일 */
+      .btn-action {
+        border-radius: 999px;
+        padding: 6px 12px;
+        border: 1px solid var(--border);
+        background: #fff;
+        font-size: 12px;
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+      }
+
+      .btn-action:hover {
+        background: #f3f4ff;
+      }
+
+      /* 삭제 버튼만 색 살짝 다르게 하고 싶으면 (선택) */
+      .btn-action.delete {
+        border-color: #f97373;
+        color: #b91c1c;
+      }
+
+      .btn-action.delete:hover {
+        background: #fef2f2;
+      }
+
+      /* responsive */
+      @media (max-width: 1100px) {
+        .container {
+          grid-template-columns: 220px 1fr;
+        }
+        aside.right {
+          grid-column: 1 / -1;
+          order: 3;
+          position: static;
+        }
+      }
+      @media (max-width: 780px) {
+        .header-inner {
+          grid-template-columns: 1fr auto;
+        }
+        .top-actions {
+          display: none;
+        }
+        .search {
+          grid-column: 1 / -1;
+        }
+        .container {
+          grid-template-columns: 1fr;
+        }
+        aside.nav {
+          position: static;
+        }
+      }
+    </style>
+  </head>
+
+  <body>
+    <!-- 헤더 공통 -->
+    <div th:replace="fragments/header :: siteHeader"></div>
+
+    <div class="container">
+      <!-- 왼쪽 메뉴 (그대로) -->
+      <div th:replace="~{fragments/left_menu :: left_Menu}"></div>
+
+      <!-- 가운데: 게시글 상세 + 댓글 -->
+      <main class="post-page">
+        <section class="post-card">
+          <!-- 상단: 게시판 이름 + 목록으로 -->
+          <div class="post-header-top">
+            <div class="board-name" th:text="${boardName}">자유게시판</div>
+            <a th:href="@{/board/{type}(type=${boardType})}">
+              <button type="button" class="btn-outline">목록으로</button>
+            </a>
+          </div>
+
+          <!-- 제목 + 메타 정보 -->
+          <h2 class="post-title" th:text="${post.title}">
+            [잡담] 게시글 제목입니다.
+          </h2>
+          <div class="post-meta">
+            <span th:text="${post.nickname}">닉네임</span>
+            <span
+              th:text="${#temporals.format(post.reg_date, 'yyyy.MM.dd HH:mm')}"
+              >2025.11.01 12:00</span
+            >
+            <span>
+              조회
+              <span th:text="${post.view_count}">30</span>
+            </span>
+            <span>
+              공감
+              <span th:text="${post.like_count}">10</span>
+            </span>
+            <span>
+              신고
+              <span th:text="${post.report_count}">1</span>
+            </span>
+          </div>
+
+          <hr class="post-separator" />
+
+          <!-- 본문 -->
+          <div class="post-content" th:text="${post.contents}">
+            게시글 내용이 들어갑니다.
+          </div>
+            <div th:if="${post.imageUrl}" class="post-image-area">
+                <img th:src="${post.imageUrl}"
+                     alt="첨부 이미지"
+                     class="post-image"
+                     style="max-width: 100%; height: auto; margin-top: 15px; margin-bottom: 15px; border-radius: 4px;"/>
+            </div>
+
+          <!-- 게시글 공감/신고 영역 -->
+          <div class="reaction-row">
+            <!-- 왼쪽: 숫자 표시 -->
+            <div class="reaction-counts">
+              <span class="like">
+                공감
+                <span th:text="${post.like_count}">10</span>
+              </span>
+              <span class="report">
+                신고
+                <span th:text="${post.report_count}">1</span>
+              </span>
+            </div>
+
+            <!-- 오른쪽: 버튼 (POST 요청) -->
+              <div class="reaction-buttons">
+                  <form th:action="@{/reaction/like}" method="post" style="margin:0">
+                      <input type="hidden" name="target_id" th:value="${post.board_id}" />
+                      <input type="hidden" name="target_type" value="BOARD" />
+                      <input type="hidden" name="action" value="LIKE" />
+                      <button type="submit" class="btn-reaction like-btn">공감하기</button>
+                  </form>
+
+                  <form th:action="@{/reaction/report}" method="post" style="margin:0">
+                      <input type="hidden" name="target_id" th:value="${post.board_id}" />
+                      <input type="hidden" name="target_type" value="BOARD" />
+                      <input type="hidden" name="action" value="REPORT" />
+                      <button type="submit" class="btn-reaction report-btn">신고하기</button>
+                  </form>
+              </div>
+          </div>
+
+          <!-- 게시글 하단 버튼 (필요 시) -->
+          <div
+            class="owner-actions"
+            th:if="${loginMember != null and loginMember.id == post.member_id}"
+          >
+            <a th:href="@{/board/{id}/edit(id=${post.board_id})}">
+              <button type="button" class="btn-secondary">수정</button>
+            </a>
+            <form
+              th:action="@{/board/{id}/delete(id=${post.board_id})}"
+              method="post"
+              style="margin: 0"
+            >
+              <button type="submit" class="btn-secondary">삭제</button>
+            </form>
+          </div>
+
+            <!-- ====== 댓글 목록 시작 ====== -->
+            <div class="comment-list" th:if="${!#lists.isEmpty(comment)}">
+                <div class="comment-item" th:each="c : ${comment}">
+                    <!-- 댓글 메타 -->
+                    <div class="comment-meta">
+                        <strong th:text="${c.nickname}">댓글닉네임</strong>
+                        <span th:text="${#temporals.format(c.reg_date, 'MM/dd HH:mm')}">11/01 12:34</span>
+                    </div>
+
+                    <!-- 댓글 내용 -->
+                    <div class="comment-content" th:text="${c.contents}">댓글 내용입니다.</div>
+
+                    <!-- 댓글 수정/삭제 버튼 영역 -->
+                    <div
+                            class="owner-actions"
+                            th:if="${loginMember != null and loginMember.id != null and loginMember.id.equals(c.member_id)}"
+                    >
+                        <!-- ① 기존 수정 버튼을 제거하거나 아래처럼 변경 -->
+                        <!-- 기존 a href 링크는 JS용 버튼으로 대체 -->
+                        <button type="button" class="btn-action edit-btn">수정</button>
+
+                        <form th:action="@{/comment/delete/{id}(id=${c.comment_id})}" method="post" style="margin:0">
+                            <button type="submit" class="btn-action delete">삭제</button>
+                        </form>
+                    </div>
+
+                    <!-- 댓글 공감/신고 영역 -->
+                    <div class="comment-reaction-row">
+                        <!-- 숫자 -->
+                        <div class="reaction-counts">
+                            <span class="like">공감 <span th:text="${c.like_count}">0</span></span>
+                            <span class="report">신고 <span th:text="${c.report_count}">0</span></span>
+                        </div>
+
+                        <!-- 버튼 -->
+                        <div class="reaction-buttons">
+                            <form th:action="@{/reaction/like}" method="post" style="margin: 0">
+                                <input type="hidden" name="target_id" th:value="${c.comment_id}" />
+                                <input type="hidden" name="target_type" value="COMMENT" />
+                                <input type="hidden" name="action" value="LIKE" />
+                                <button type="submit" class="btn-reaction like-btn">공감</button>
+                            </form>
+
+                            <form th:action="@{/reaction/report}" method="post" style="margin: 0">
+                                <input type="hidden" name="target_id" th:value="${c.comment_id}" />
+                                <input type="hidden" name="target_type" value="COMMENT" />
+                                <input type="hidden" name="action" value="REPORT" />
+                                <button type="submit" class="btn-reaction report-btn">신고</button>
+                            </form>
+                        </div>
+                    </div>
+
+                    <!-- ② JS용 댓글 수정 폼 placeholder: 클릭 시 나타남 -->
+                    <form th:action="@{/comment/edit/{id}(id=${c.comment_id})}" method="post" class="edit-comment-form" style="display:none; margin-top:6px;">
+                        <textarea name="contents" required th:text="${c.contents}" style="width: 400px; height: 60px; resize: vertical;"></textarea>
+                        <button type="submit" class="btn-action">저장</button>
+                        <button type="button" class="btn-action cancel-btn">취소</button>
+                    </form>
+
+                </div>
+            </div>
+            <!-- ====== 댓글 목록 끝 ====== -->
+            <!-- 댓글 작성 폼 -->
+            <div class="comment-section">
+                <div class="comment-header">
+                    <h3>댓글 작성</h3>
+                    <span th:if="${loginMember == null}">로그인 후 작성 가능합니다</span>
+                </div>
+
+                <form th:action="@{/comment/{board_id}(board_id=${post.board_id})}"
+                      method="post" class="comment-form"
+                      th:if="${loginMember != null}">
+                    <textarea name="contents" placeholder="댓글을 입력하세요..." required></textarea>
+                    <div class="comment-form-footer">
+                        <button type="submit" class="btn-comment">작성</button>
+                    </div>
+                </form>
+            </div>
+
+        </section>
+      </main>
+
+      <!-- 오른쪽 사이드바 (그대로) -->
+      <div th:replace="~{fragments/right_sidebar :: right_menu}"></div>
+    </div>
+
+    <!-- 푸터 공통 -->
+    <div th:replace="fragments/footer :: siteFooter"></div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+  document.querySelectorAll('.comment-item').forEach(item => {
+    const editBtn = item.querySelector('.edit-btn');
+    const form = item.querySelector('.edit-comment-form');
+    const contentDiv = item.querySelector('.comment-content');
+    const cancelBtn = item.querySelector('.cancel-btn');
+
+    // 🟡 요소가 없으면 건너뛰기 → 오류 방지 (핵심)
+    if (!editBtn || !form || !contentDiv || !cancelBtn) return;
+
+    editBtn.addEventListener('click', function() {
+      form.style.display = 'block';
+      contentDiv.style.display = 'none';
+      editBtn.style.display = 'none';
+    });
+
+    cancelBtn.addEventListener('click', function() {
+      form.style.display = 'none';
+      contentDiv.style.display = 'block';
+      editBtn.style.display = 'inline-flex';
+    });
+  });
+});
+
+    </script>
+  </body>
+</html>
